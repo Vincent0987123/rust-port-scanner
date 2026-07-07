@@ -1,13 +1,14 @@
 mod subfiles;
-use std::process;
-use std::sync::Mutex;
+use std::sync::{Mutex};
 use subfiles::io;
 use regex::Regex;
-use subfiles::scan;
+use crate::subfiles::mt::{get_results, smart_scanning, ScanResult, RESULTS};
+use crate::subfiles::os::check_os_p22;
 
 pub static WORKING_MODE: Mutex<String> = Mutex::new(String::new());
-pub static PORT_RANGE: Mutex<(u16, u16)> = Mutex::new((0, 0));
+pub static PORT_RANGE: Mutex<Vec<u16>> = Mutex::new(Vec::new());
 pub static TARGET_IP: Mutex<String> = Mutex::new(String::new());
+
 
 struct AllowedInput{
     string_array: Vec<String>
@@ -17,9 +18,12 @@ fn main() {
     io::print_output("Ready to Start!");
     io::print_output("Which mode should be used to scan?");
     get_working_mode();
-    get_target_ip();
+    ask_target_ip();
     get_port_range();
-    scan::run();
+    smart_scanning();
+    if get_results().contains(&ScanResult{port: 22, result: "open".to_string() }) {
+        check_os_p22()
+    }
 }
 
 pub fn set_working_mode(mode: String) {
@@ -52,7 +56,9 @@ pub fn set_port_range(ports: (String, String)) {
         return;
     }
     let mut port_range_lock = PORT_RANGE.lock().unwrap();
-    *port_range_lock = (start_port, end_port);
+    for port in start_port..=end_port {
+        port_range_lock.push(port);
+    }
 }
 
 pub fn set_target_ip(ip: String) {
@@ -129,18 +135,23 @@ fn get_port_range() {
     let string = format!("Port range selected: {start_port} - {end_port}");
     io::print_output(&string);
     let mut port_range_lock = PORT_RANGE.lock().unwrap();
-    *port_range_lock = (start_port.parse::<u16>().unwrap(), end_port.parse::<u16>().unwrap());
+    for port in start_port.parse::<u16>().unwrap()..=end_port.parse::<u16>().unwrap() {
+        port_range_lock.push(port);
+    }
 }
 
-fn get_target_ip(){
+fn ask_target_ip(){
     io::print_output("Please enter the target IP:");
     let target_ip = io::get_input();
     if !check_for_valid_ip(&target_ip) {
         io::print_output("Invalid IP selected.");
-        get_target_ip()
+        ask_target_ip()
     }
     let mut target_ip_lock = TARGET_IP.lock().unwrap();
     *target_ip_lock = target_ip;
 }
 
-
+pub fn get_target_ip() -> String {
+    let ip = TARGET_IP.lock().unwrap();
+    ip.clone()
+}

@@ -1,52 +1,29 @@
-use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::packet::ipv4::Ipv4Packet;
-use pnet::packet::tcp::TcpPacket;
-use pnet::transport::{transport_channel, TransportChannelType::Layer3};
-use std::net::Ipv4Addr;
-use pnet::packet::Packet;
+use std::io::Read;
+use std::net::TcpStream;
+use std::time::Duration;
+use crate::{get_target_ip};
 
-pub fn run() {
-    // 1. Transport-Kanal auf Layer 3 (IP-Ebene) öffnen, um Raw Packets zu empfangen
-    let protocol = Layer3(IpNextHeaderProtocols::Tcp);
-    let (_, mut rx) = transport_channel(4096, protocol)
-        .expect("Fehler beim Öffnen des Transport-Kanals. (Root/Admin-Rechte vorhanden?)");
+pub fn check_os_p22(){
+    let target = format!("{}:22", get_target_ip());
 
-    println!("Warte auf TCP-Antworten für OS-Analyse...");
+    
+    if let Ok(mut stream) = TcpStream::connect_timeout(&target.parse().unwrap(), Duration::from_secs(3)) {
+        let mut buffer = [0; 1024];
+        
+        if let Ok(size) = stream.read(&mut buffer) {
+            let response = String::from_utf8_lossy(&buffer[..size]);
+            println!("Response from server:\n{}", response);
 
-    let mut iter = pnet::transport::ipv4_packet_iter(&mut rx);
-    loop {
-        if let Ok((packet, _addr)) = iter.next() {
-            // Analysiere das eingehende IPv4-Paket
-            analyze_os(&packet);
-        }
-    }
-}
-
-fn analyze_os(ip_packet: &Ipv4Packet) {
-    // Wir interessieren uns nur für TCP-Pakete
-    if ip_packet.get_next_level_protocol() == IpNextHeaderProtocols::Tcp {
-        if let Some(tcp_packet) = TcpPacket::new(ip_packet.payload()) {
-
-            // Nur SYN-ACK Antworten auswerten (Wert 18: SYN=2 + ACK=16)
-            if tcp_packet.get_flags() == 18 {
-                let ttl = ip_packet.get_ttl();
-                let window_size = tcp_packet.get_window();
-                let source_ip = ip_packet.get_source();
-
-                println!("\n[+] Antwort von {} erhalten!", source_ip);
-                println!(" -> TTL: {}", ttl);
-                println!(" -> Window Size: {}", window_size);
-
-                // Einfache Heuristik (Grobe Schätzung)
-                let os_guess = match ttl {
-                    64 => "Linux / Android / macOS",
-                    128 => "Windows",
-                    255 => "Cisco Router / Embedded OS / FreeBSD",
-                    _ => "Unbekanntes OS (Möglicherweise Paket unterwegs modifiziert)",
-                };
-
-                println!(" -> Vermutetes Betriebssystem: **{}**", os_guess);
+            // Einfaches Pattern Matching für das OS
+            if response.contains("Ubuntu") {
+                println!("OS: Ubuntu Linux");
+            } else if response.contains("Debian") {
+                println!("OS: Debian Linux");
+            } else if response.contains("Windows") {
+                println!("OS: Windows (SSH Server)");
             }
         }
+    } else {
+        println!("Port 22 closed or not reachable.");
     }
 }

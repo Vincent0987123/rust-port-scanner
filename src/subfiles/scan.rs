@@ -6,10 +6,9 @@ use std::time::Duration;
 use std::io::ErrorKind;
 
 
-fn check_port(&port: &u16, ip: &String) -> String {
+pub fn check_port(&port: &u16, ip: &String) -> String {
     let address = format!("{}:{}", &ip, port);
     let timeout = Duration::from_millis(500);
-    let ip = TARGET_IP.lock().unwrap();
 
     match TcpStream::connect_timeout(&address.parse::<SocketAddr>().unwrap(), timeout) {
         Ok(_) => "open".to_string(),
@@ -25,14 +24,12 @@ pub fn run() {
     let mode: String = WORKING_MODE.lock().unwrap().clone();
     let ip: String = TARGET_IP.lock().unwrap().clone();
     let port_range = PORT_RANGE.lock().unwrap().clone();
-    let start_port = port_range.0;
-    let end_port = port_range.1;
 
+
+    if mode == "Safe" { println!("Safe mode is not implemented yet"); }
     if mode == "Fast" {
-        for port in start_port..=end_port {
+        for port in port_range[0]..=port_range[port_range.len() - 1] {
             println!("Port {} is {}", port, check_port(&port, &ip));
         }
     }
-    if 
-
 }
