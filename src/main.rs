@@ -124,13 +124,15 @@ fn get_port_range() {
     let start_port = io::get_input();
     if !check_for_valid_port(&start_port) {
         io::print_output("Invalid port selected.");
-        get_port_range()
+        get_port_range();
+        return
     }
     io::print_output("End Port:");
     let end_port = io::get_input();
     if !check_for_valid_port(&end_port) {
         io::print_output("Invalid port selected.");
-        get_port_range()
+        get_port_range();
+        return
     }
     let string = format!("Port range selected: {start_port} - {end_port}");
     io::print_output(&string);
