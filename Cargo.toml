@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 regex = "1.12.4"
 rayon = "1.12"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
