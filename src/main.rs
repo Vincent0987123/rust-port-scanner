@@ -1,39 +1,109 @@
 mod subfiles;
-use std::sync::{Mutex};
+
+use std::env;
+use std::sync::{Arc, Mutex};
 use subfiles::io;
 use regex::Regex;
-use crate::subfiles::mt::{get_results, smart_scanning, ScanResult, RESULTS};
-use crate::subfiles::os::check_os_p22;
+use crate::subfiles::gui;
+use crate::subfiles::gui::OperatingMode;
+use crate::subfiles::mt::{smart_scanning, ScanResult, ResultType};
 
-pub static WORKING_MODE: Mutex<String> = Mutex::new(String::new());
+pub static WORKING_MODE: Mutex<OperatingMode> = Mutex::new(OperatingMode::Safe);
 pub static PORT_RANGE: Mutex<Vec<u16>> = Mutex::new(Vec::new());
 pub static TARGET_IP: Mutex<String> = Mutex::new(String::new());
+pub static IS_TERMINAL: Mutex<bool> = Mutex::new(false);
 
 
 struct AllowedInput{
     string_array: Vec<String>
 }
 
-fn main() {
-    io::print_output("Ready to Start!");
-    io::print_output("Which mode should be used to scan?");
-    get_working_mode();
-    ask_target_ip();
-    get_port_range();
-    smart_scanning();
-    if get_results().contains(&ScanResult{port: 22, result: "open".to_string() }) {
-        check_os_p22()
+fn main() -> eframe::Result<()>{
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 && args[1] == "--term"{
+        *IS_TERMINAL.lock().unwrap() = true;
+        io::print_output("Ready to Start!");
+        io::print_output("Which mode should be used to scan?");
+        get_working_mode();
+        ask_target_ip();
+        get_port_range();
+        let result = smart_scanning(None);
+        // if get_results().contains(&ScanResult{port: 22, result: ResultType::Open }) {
+        //     check_os_p22()
+        // }
+        io::print_output("Scan completed.");
+        Ok(())
+    }
+    else {
+        #[cfg(target_os = "linux")]
+        ensure_linux_desktop_entry();
+
+        let icon_bytes = include_bytes!("../rust-logo-512x512.png");
+        let image = image::load_from_memory(icon_bytes)
+            .expect("Failed to load icon image")
+            .to_rgba8();
+
+        let (width, height) = image.dimensions();
+        let icon_data = egui::IconData {
+            rgba: image.into_raw(),
+            width,
+            height,
+        };
+
+        let native_options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_app_id("rust-portscanner")
+                .with_inner_size([1000.0, 500.0])
+                .with_min_inner_size([300.0, 220.0])
+                .with_icon(Arc::new(icon_data)),
+            ..Default::default()
+        };
+        eframe::run_native(
+            "Rust PortScanner",
+            native_options,
+            Box::new(|cc| Ok(Box::new(gui::Gui::new(cc)))),
+        )
     }
 }
 
-pub fn set_working_mode(mode: String) {
-    let valid_input = AllowedInput { string_array: vec!["Safe".to_string(), "Fast".to_string()] };
-    if check_for_valid_input(valid_input, &mode) {
-        let mut mode_lock = WORKING_MODE.lock().unwrap();
-        *mode_lock = mode;
-    } else {
-        io::print_output("Invalid mode. Mode not set.");
+#[cfg(target_os = "linux")]
+fn ensure_linux_desktop_entry() {
+    if let Some(home) = dirs::home_dir() {
+        let apps_dir = home.join(".local/share/applications");
+        let icons_dir = home.join(".local/share/icons");
+
+        let _ = std::fs::create_dir_all(&apps_dir);
+        let _ = std::fs::create_dir_all(&icons_dir);
+
+        let icon_path = icons_dir.join("rust-portscanner.png");
+        let desktop_path = apps_dir.join("rust-portscanner.desktop");
+        
+        if !icon_path.exists() {
+            let icon_bytes = include_bytes!("../rust-logo-512x512.png");
+            let _ = std::fs::write(&icon_path, icon_bytes);
+        }
+        
+        if let Ok(current_exe) = std::env::current_exe() {
+            let desktop_entry = format!(
+                "[Desktop Entry]\n\
+                Type=Application\n\
+                Name=Rust PortScanner\n\
+                Exec={}\n\
+                Icon={}\n\
+                StartupWMClass=rust-portscanner\n\
+                Terminal=false\n",
+                current_exe.to_string_lossy(),
+                icon_path.to_string_lossy()
+            );
+
+            let _ = std::fs::write(desktop_path, desktop_entry);
+        }
     }
+}
+
+pub fn set_working_mode(mode: &OperatingMode) {
+    let mut mode_lock = WORKING_MODE.lock().unwrap();
+    *mode_lock = *mode;
 }
 
 pub fn set_port_range(ports: (String, String)) {
@@ -56,6 +126,7 @@ pub fn set_port_range(ports: (String, String)) {
         return;
     }
     let mut port_range_lock = PORT_RANGE.lock().unwrap();
+    port_range_lock.clear();
     for port in start_port..=end_port {
         port_range_lock.push(port);
     }
@@ -100,10 +171,13 @@ fn get_working_mode() {
     if !check_working_mode(&mode) {
         get_working_mode()
     } else {
-        if mode == "1" { mode = "Safe".parse().unwrap() }
-        if mode == "2" { mode = "Fast".parse().unwrap() }
+        let operating_mode = match mode.as_str() {
+            "1" => OperatingMode::Safe,
+            "2" => OperatingMode::Fast,
+            _ => OperatingMode::Safe,
+        };
         let mut mode_lock = WORKING_MODE.lock().unwrap();
-        *mode_lock = String::from(mode);
+        *mode_lock = operating_mode;
     }
 }
 
