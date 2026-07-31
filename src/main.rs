@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod subfiles;
 
 use std::env;
@@ -6,7 +7,7 @@ use subfiles::io;
 use regex::Regex;
 use crate::subfiles::gui;
 use crate::subfiles::gui::OperatingMode;
-use crate::subfiles::mt::{smart_scanning, ScanResult, ResultType};
+use crate::subfiles::mt::{smart_scanning, ScanResult};
 
 pub static WORKING_MODE: Mutex<OperatingMode> = Mutex::new(OperatingMode::Safe);
 pub static PORT_RANGE: Mutex<Vec<u16>> = Mutex::new(Vec::new());
@@ -22,12 +23,14 @@ fn main() -> eframe::Result<()>{
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 && args[1] == "--term"{
         *IS_TERMINAL.lock().unwrap() = true;
+        #[cfg(windows)]
+        attach_console();
         io::print_output("Ready to Start!");
         io::print_output("Which mode should be used to scan?");
         get_working_mode();
         ask_target_ip();
         get_port_range();
-        let result = smart_scanning(None);
+        let _ = smart_scanning(None);
         // if get_results().contains(&ScanResult{port: 22, result: ResultType::Open }) {
         //     check_os_p22()
         // }
@@ -58,12 +61,6 @@ fn main() -> eframe::Result<()>{
                 .with_icon(Arc::new(icon_data)),
             ..Default::default()
         };
-
-        if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
-            let mut res = winres::WindowsResource::new();
-            res.set_icon("favicon.ico");
-            res.compile().unwrap();
-        }
 
         eframe::run_native(
             "Rust PortScanner",
@@ -105,6 +102,17 @@ fn ensure_linux_desktop_entry() {
 
             let _ = std::fs::write(desktop_path, desktop_entry);
         }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn attach_console() {
+    unsafe {
+     use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+
+
+        // Hängt STDOUT/STDERR an das Terminal an, aus dem die EXE gestartet wurde
+        AttachConsole(ATTACH_PARENT_PROCESS);
     }
 }
 
@@ -162,7 +170,7 @@ fn check_for_valid_port(port: &str) -> bool {
     }
 
     match port.parse::<u16>() {
-        Ok(port_num) if port_num >= 1 && port_num <= 65535 => true,
+        Ok(port_num) if port_num >= 1 && port_num <= u16::MAX => true,
         _ => false,
     }
 }
@@ -174,7 +182,7 @@ fn check_for_valid_ip(ip: &String) -> bool {
 
 fn get_working_mode() {
     io::print_output("Please enter the mode: \n 1. Safe \n 2. Fast \n");
-    let mut mode = io::get_input();
+    let mode = io::get_input();
     if !check_working_mode(&mode) {
         get_working_mode()
     } else {

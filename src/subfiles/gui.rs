@@ -8,7 +8,6 @@ use crate::{ScanResult};
 use std::collections::BTreeSet;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::time::Duration;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum OperatingMode {
@@ -98,7 +97,7 @@ impl Gui {
         set_target_ip(ip_address);
         set_port_range((start_port.to_string(), end_port.to_string()));
 
-        let result_set = smart_scanning(Some(tx));
+        let _ = smart_scanning(Some(tx));
 
         // if get_results().contains(&ScanResult{port: 22, result: ResultType::Open }) {
         //     check_os_p22()

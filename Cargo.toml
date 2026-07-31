@@ -1,6 +1,6 @@
 [package]
 name = "PortScanner"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -10,8 +10,13 @@ eframe = "0.35.0"
 egui = "0.35.0"
 image = { version = "0.25", default-features = false, features = ["png"] }
 dirs = "6.0.0"
-winres = "0.1"
+windows-sys = "0.61.2"
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_System_Console"] }
 
 [[bin]]
 name = "PortScanner"
 path = "src/main.rs"
+
+[build-dependencies]
+embed-resource = "3.0.11"
